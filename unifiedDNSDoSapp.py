@@ -1,17 +1,19 @@
 import streamlit as st
 
-# --- Global App Setup ---
-st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
+st.set_page_config(page_title="Unified Network Anomaly Detection", layout="wide")
 st.title("🌐 Real-Time Network Anomaly Detection")
 
-# --- Dashboard Toggle ---
-dashboard_choice = st.radio("Select a Dashboard:", ["🔴 DoS", "🟦 DNS"], horizontal=True)
+# --- Dashboard selector ---
+options = {
+    "🚨 DoS Dashboard": "dos",
+    "📡 DNS Dashboard": "dns"
+}
+choice = st.radio("Select Dashboard:", list(options.keys()))
 
-# ----------------------- 🔴 DOS DASHBOARD -----------------------
-if dashboard_choice == "🔴 DoS":
-    st.subheader("🚨 DoS Anomaly Detection Dashboard")
-
-import streamlit as st
+# --- DoS Dashboard ---
+if options[choice] == "dos":
+    st.subheader("🚨 DoS Anomaly Detection")
+   import streamlit as st
 import pandas as pd
 import numpy as np
 import uuid
@@ -286,19 +288,12 @@ with tabs[4]:
         st.download_button("Download CSV", csv_data, "dos_historical_data.csv", "text/csv")
     else:
         st.warning("No historical data available.")
+    st.write("Running DoS dashboard...")  # Replace with real content
 
-options = {
-    "🚨 DoS Dashboard": "dos",
-    "📡 DNS Dashboard": "dns"
-}
-choice = st.radio("Select Dashboard:", list(options.keys()))
-
-if options[choice] == "dos":
-    # DoS code
+# --- DNS Dashboard ---
 elif options[choice] == "dns":
-    # DNS code
-
-import streamlit as st
+    st.subheader("📡 DNS Anomaly Detection")
+    import streamlit as st
 st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
 
 import requests
@@ -643,4 +638,7 @@ with tabs[4]:
         st.download_button("Download Historical Data (CSV)", csv_data, "historical_data.csv", "text/csv")
     else:
         st.warning("No historical data available from InfluxDB.")
+
+    st.write("Running DNS dashboard...")  # Replace with real content
+
 
