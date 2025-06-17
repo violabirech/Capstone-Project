@@ -287,9 +287,16 @@ with tabs[4]:
     else:
         st.warning("No historical data available.")
 
-# ----------------------- 🟦 DNS DASHBOARD -----------------------
-elif dashboard_choice == "🟦 DNS":
-    st.subheader("📡 DNS Anomaly Detection Dashboard")
+options = {
+    "🚨 DoS Dashboard": "dos",
+    "📡 DNS Dashboard": "dns"
+}
+choice = st.radio("Select Dashboard:", list(options.keys()))
+
+if options[choice] == "dos":
+    # DoS code
+elif options[choice] == "dns":
+    # DNS code
 
 import streamlit as st
 st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
