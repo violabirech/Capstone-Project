@@ -5,48 +5,32 @@ import numpy as np
 import uuid
 import requests
 import sqlite3
+import plotly.express as px
 from datetime import datetime, timedelta, timezone
 from sklearn.ensemble import IsolationForest
 from influxdb_client import InfluxDBClient
 from streamlit_autorefresh import st_autorefresh
-import plotly.express as px
 
-# -------------------- Global Setup --------------------
+# --- Page Setup ---
 st.set_page_config(page_title="Unified Network Anomaly Detection", layout="wide")
-st.title("🌐 Real-Time Network Anomaly Detection")
 
-options = {
-    "🚨 DoS Dashboard": "dos",
-    "📡 DNS Dashboard": "dns"
-}
-choice = st.radio("Select Dashboard:", list(options.keys()))
-selected = options[choice]
+# --- Dashboard selector ---
+dashboard_options = {"🚨 DoS Dashboard": "dos", "📡 DNS Dashboard": "dns"}
+dashboard_choice = st.radio("Select Dashboard:", list(dashboard_options.keys()))
+dashboard_selected = dashboard_options[dashboard_choice]
 
-# -------------------- Shared Config --------------------
+# Shared constants
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
-st.sidebar.header("Settings")
-alerts_enabled = st.sidebar.checkbox("Enable Discord Alerts", value=True)
-highlight_enabled = st.sidebar.checkbox("Highlight Anomalies", value=True)
 highlight_color = st.sidebar.selectbox("Anomaly Highlight Color", ["red", "orange", "yellow", "blue", "green"], index=4)
 
-# -------------------- DoS Dashboard --------------------
-if selected == "dos":
-    st.subheader("🚨 DoS Anomaly Detection")
+# --- DoS Dashboard ---
+if dashboard_selected == "dos":
+    # --- DoS Setup ---
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
     INFLUXDB_ORG = "Anormally Detection"
     INFLUXDB_BUCKET = "realtime"
     INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
     MEASUREMENT = "network_traffic"
-
-    time_range_query_map = {
-        "Last 30 min": "-30m",
-        "Last 1 hour": "-1h",
-        "Last 24 hours": "-24h",
-        "Last 7 days": "-7d"
-    }
-
-    time_range = st.sidebar.selectbox("Time Range", list(time_range_query_map.keys()), index=1)
-    thresh = st.sidebar.slider("Anomaly Score Threshold", -1.0, 1.0, -0.1, 0.01)
 
     def query_influx(start_range="-1h", limit=300):
         try:
@@ -65,56 +49,50 @@ if selected == "dos":
                 '''
                 df = client.query_api().query_data_frame(query)
                 df = df.rename(columns={"_time": "timestamp"})
-                return df.dropna() if not df.empty else pd.DataFrame()
+                if df.empty:
+                    return pd.DataFrame()
+                expected = {"packet_rate", "packet_length", "inter_arrival_time"}
+                missing = expected - set(df.columns)
+                if missing:
+                    st.error(f"InfluxDB error: missing fields: {sorted(missing)}")
+                    return pd.DataFrame()
+                return df.dropna(subset=list(expected))
         except Exception as e:
             st.error(f"InfluxDB error: {e}")
             return pd.DataFrame()
 
     def detect_anomalies(df):
-        if df.empty: return df
-        model = IsolationForest(n_estimators=100, contamination=0.15, random_state=42)
+        required_cols = {"packet_rate", "packet_length", "inter_arrival_time"}
+        if df.empty or not required_cols.issubset(df.columns):
+            return pd.DataFrame()
         X = df[["packet_rate", "packet_length", "inter_arrival_time"]]
+        model = IsolationForest(n_estimators=100, contamination=0.15, random_state=42)
         model.fit(X)
         df["anomaly_score"] = model.decision_function(X)
         df["anomaly"] = (model.predict(X) == -1).astype(int)
         return df
 
-    df = query_influx(time_range_query_map[time_range])
+    st.title("🚨 DoS Anomaly Detection")
+    df = query_influx("-1h")
     df = detect_anomalies(df)
-    tabs = st.tabs(["Overview", "Live Stream"])
-
-    with tabs[0]:
+    if not df.empty and "anomaly" in df.columns:
         st.metric("Total Records", len(df))
         st.metric("Anomaly Rate", f"{df['anomaly'].mean():.2%}")
-        st.dataframe(df)
+        st.metric("Recent Attacks", df["anomaly"].sum())
+    else:
+        st.warning("No data or anomaly column missing.")
 
-    with tabs[1]:
-        st_autorefresh(interval=10000, key="live_dos")
-        live_df = query_influx("-10s", 100)
-        if not live_df.empty:
-            result = detect_anomalies(live_df)
-            attacks = result[result["anomaly"] == 1]
-            st.dataframe(attacks if not attacks.empty else result)
+    st.write("Preview:")
+    st.dataframe(df.head())
 
-# -------------------- DNS Dashboard --------------------
-elif selected == "dns":
-    st.subheader("📡 DNS Anomaly Detection")
+# --- DNS Dashboard ---
+elif dashboard_selected == "dns":
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
     INFLUXDB_ORG = "Anormally Detection"
     INFLUXDB_BUCKET = "realtime_dns"
-    INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+    INFLUXDB_TOKEN = "6gjE97dCC24hgOgWNmRXPqOS0pfc0pMSYeh5psL8e5u2T8jGeV1F17CU-U1z05if0jfTEmPRW9twNPSXN09SRQ=="
 
-    time_range_query_map = {
-        "Last 30 min": "-30m",
-        "Last 1 hour": "-1h",
-        "Last 24 hours": "-24h",
-        "Last 7 days": "-7d"
-    }
-
-    time_range = st.sidebar.selectbox("Time Range", list(time_range_query_map.keys()), index=1)
-    thresh = st.sidebar.slider("Reconstruction Threshold", 0.0, 1.0, 0.1, 0.01)
-
-    def query_dns(start_range="-10m", n=1000):
+    def query_dns_data(start_range="-1h", limit=300):
         try:
             with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
                 query = f'''
@@ -123,27 +101,27 @@ elif selected == "dns":
                   |> filter(fn: (r) => r._measurement == "dns")
                   |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
                   |> sort(columns: ["_time"], desc: false)
-                  |> limit(n: {n})
+                  |> limit(n: {limit})
                 '''
-                tables = client.query_api().query_data_frame(query)
-                if tables.empty: return pd.DataFrame()
-                df = tables.rename(columns={"_time": "timestamp"})
-                df["reconstruction_error"] = np.random.rand(len(df))
-                df["anomaly"] = (df["reconstruction_error"] > thresh).astype(int)
+                df = client.query_api().query_data_frame(query)
+                df = df.rename(columns={"_time": "timestamp"})
+                if not df.empty:
+                    df["reconstruction_error"] = np.random.rand(len(df))
+                    df["anomaly"] = (df["dns_rate"] > 100) | (df["inter_arrival_time"] < 0.01)
+                    df["anomaly"] = df["anomaly"].astype(int)
                 return df
         except Exception as e:
-            st.error(f"InfluxDB DNS query error: {e}")
+            st.error(f"InfluxDB error: {e}")
             return pd.DataFrame()
 
-    df = query_dns(time_range_query_map[time_range])
-    tabs = st.tabs(["Overview", "Live Stream"])
-
-    with tabs[0]:
+    st.title("📡 DNS Anomaly Detection")
+    df = query_dns_data("-1h")
+    if not df.empty and "anomaly" in df.columns:
         st.metric("Total Records", len(df))
         st.metric("Anomaly Rate", f"{df['anomaly'].mean():.2%}")
-        st.dataframe(df)
+        st.metric("Recent Attacks", df["anomaly"].sum())
+    else:
+        st.warning("No data or anomaly column missing.")
 
-    with tabs[1]:
-        st_autorefresh(interval=10000, key="live_dns")
-        live_df = query_dns("-10s", 100)
-        st.dataframe(live_df if not live_df.empty else pd.DataFrame(columns=["timestamp", "dns_rate", "inter_arrival_time"]))
+    st.write("Preview:")
+    st.dataframe(df.head())
