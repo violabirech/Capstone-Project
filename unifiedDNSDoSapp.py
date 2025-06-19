@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -62,11 +63,23 @@ if dashboard_choice == "DoS":
     def detect_dos_anomalies(df):
         if df.empty:
             return df
-        model = IsolationForest(n_estimators=100, contamination=0.15)
-        X = df[["packet_rate", "packet_length", "inter_arrival_time"]]
-        df["anomaly_score"] = model.fit_predict(X)
-        df["anomaly"] = (model.predict(X) == -1).astype(int)
-        return df
+        api_url = "https://violabirech-final.hf.space/predict/dos"
+        results = []
+        for _, row in df.iterrows():
+            try:
+                response = requests.post(api_url, json={
+                    "packet_rate": row["packet_rate"],
+                    "packet_length": row["packet_length"],
+                    "inter_arrival_time": row["inter_arrival_time"]
+                })
+                result = response.json()
+                row["anomaly_score"] = result["anomaly_score"]
+                row["anomaly"] = result["anomaly"]
+            except Exception as e:
+                row["anomaly_score"] = -1
+                row["anomaly"] = 0
+            results.append(row)
+        return pd.DataFrame(results)
 
     df_dos = query_dos_data(time_range_query_map[time_range])
     df_dos = detect_dos_anomalies(df_dos)
@@ -100,6 +113,7 @@ elif dashboard_choice == "DNS":
     INFLUXDB_ORG = "Anormally Detection"
     INFLUXDB_BUCKET = "realtime_dns"
     INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+
     def query_dns_data(start_range="-1h", limit=300):
         try:
             with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
@@ -115,8 +129,17 @@ elif dashboard_choice == "DNS":
                     for record in table.records:
                         row = record.values.copy()
                         row["timestamp"] = record.get_time()
-                        row["reconstruction_error"] = np.random.rand()
-                        row["anomaly"] = int(row.get("dns_rate", 0) > 100 or row.get("inter_arrival_time", 1) < 0.01)
+                        try:
+                            response = requests.post("https://violabirech-final.hf.space/predict/dns", json={
+                                "dns_rate": row.get("dns_rate", 0),
+                                "inter_arrival_time": row.get("inter_arrival_time", 1)
+                            })
+                            result = response.json()
+                            row["reconstruction_error"] = result["reconstruction_error"]
+                            row["anomaly"] = result["anomaly"]
+                        except Exception:
+                            row["reconstruction_error"] = -1
+                            row["anomaly"] = 0
                         records.append(row)
                 return pd.DataFrame(records)
         except Exception as e:
