@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,10 +10,10 @@ import plotly.express as px
 
 # Set up page
 st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
-st.title("🌐 Real-Time Network Anomaly Detection")
+st.title("Real-Time Network Anomaly Detection")
 
 # Dashboard toggle
-dashboard_choice = st.radio("Select a Dashboard:", ["🔴 DoS", "🟦 DNS"], horizontal=True)
+dashboard_choice = st.radio("Select a Dashboard:", ["DoS", "DNS"], horizontal=True)
 
 # Global settings
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
@@ -34,8 +33,8 @@ time_range = st.sidebar.selectbox("Time Range", list(time_range_query_map.keys()
 threshold = st.sidebar.slider("Threshold", 0.01, 1.0, 0.1, 0.01)
 
 # --- DoS Dashboard ---
-if dashboard_choice == "🔴 DoS":
-    st.subheader("🚨 DoS Anomaly Detection Dashboard")
+if dashboard_choice == "DoS":
+    st.subheader("DoS Anomaly Detection Dashboard")
 
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
     INFLUXDB_ORG = "Anormally Detection"
@@ -94,8 +93,8 @@ if dashboard_choice == "🔴 DoS":
             st.info("No data for metrics.")
 
 # --- DNS Dashboard ---
-elif dashboard_choice == "🟦 DNS":
-    st.subheader("📡 DNS Anomaly Detection Dashboard")
+elif dashboard_choice == "DNS":
+    st.subheader("DNS Anomaly Detection Dashboard")
 
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
     INFLUXDB_ORG = "Anormally Detection"
