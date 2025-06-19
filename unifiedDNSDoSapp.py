@@ -13,7 +13,7 @@ st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide"
 st.title("Real-Time Network Anomaly Detection")
 
 # Dashboard toggle
-dashboard_choice = st.radio("Select a Dashboard:", ["DoS", "DNS"], horizontal=True)
+dashboard_choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
 
 # Global settings
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
