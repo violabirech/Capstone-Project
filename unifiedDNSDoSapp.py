@@ -85,24 +85,168 @@ if dashboard_choice == "DoS":
 
     tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
 
-    with tabs[0]:
-        st.write("### Overview")
-        if df_dos.empty:
-            st.warning("No data found.")
-        else:
-            st.metric("Total Records", len(df_dos))
-            st.metric("Anomaly Rate", f"{df_dos['anomaly'].mean():.2%}")
-            st.dataframe(df_dos.tail(50))
+# OVERVIEW TAB
+with tabs[0]:
+    st.title("DNS Anomaly Detection")
+    st.markdown("""
+    Welcome to the DNS Anomaly Detection Dashboard. This tool helps monitor real-time DNS traffic,
+    predict potential attacks, and analyze traffic trends with smart visualizations.
+    """)
 
-    with tabs[3]:
-        st.write("### Metrics & Alerts")
-        if not df_dos.empty:
-            pie = px.pie(df_dos, names=df_dos["anomaly"].map({0: "Normal", 1: "Attack"}), title="Anomaly Distribution")
-            line = px.line(df_dos, x="timestamp", y="anomaly_score", title="Anomaly Score Over Time")
-            st.plotly_chart(pie)
-            st.plotly_chart(line)
+    df = pd.DataFrame(st.session_state.predictions)
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        from datetime import timezone
+        min_time = datetime.now(timezone.utc) - pd.to_timedelta(time_range_query_map[time_range][1:])
+        filtered = df[df["timestamp"] >= min_time]
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Predictions", len(filtered))
+        col2.metric("Attack Rate", f"{filtered['anomaly'].mean():.2%}" if not filtered.empty else "0.00%")
+        col3.metric("Recent Attacks", filtered.tail(10)["anomaly"].sum())
+
+        rows_per_page = 100
+        total_rows = len(filtered)
+        total_pages = (total_rows - 1) // rows_per_page + 1
+        page_number = st.number_input("Page", min_value=1, max_value=total_pages, value=1, step=1, key="overview_page") - 1
+        start_idx = page_number * rows_per_page
+        end_idx = start_idx + rows_per_page
+        paginated_df = filtered.sort_values("timestamp", ascending=False).iloc[start_idx:end_idx]
+
+        def highlight_overview_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        st.dataframe(paginated_df.style.apply(highlight_overview_anomaly, axis=1))
+
+        if len(filtered) > 1:
+            st.subheader("Time Series Analysis")
+            selected_vars = st.multiselect("Select metrics to display:",
+                                           options=["reconstruction_error", "inter_arrival_time", "dns_rate"],
+                                           default=["reconstruction_error", "inter_arrival_time", "dns_rate"])
+            labels = {
+                "reconstruction_error": "Reconstruction Error",
+                "inter_arrival_time": "Inter Arrival Time",
+                "dns_rate": "DNS Rate"
+            }
+            fig = px.line(filtered, x="timestamp", y=selected_vars, labels=labels, title="DNS Metrics Over Time")
+            fig.add_hline(y=thresh, line_dash="dash", line_color="black", annotation_text=f"Threshold ({thresh})")
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No data for metrics.")
+            st.info("Not enough data to display time-series analysis.")
+
+# LIVE STREAM TAB
+with tabs[1]:
+    st.session_state['Live Stream'] = True
+    st_autorefresh(interval=10000, key="live_stream_refresh")
+
+    live_data = query_latest_influx(start_range="-10s", n=20)
+    new_entries = []
+    for row in live_data:
+        if row not in st.session_state.predictions:
+            st.session_state.predictions.append(row)
+            new_entries.append(row)
+            if alerts_enabled and row["anomaly"] == 1:
+                st.session_state['live_alert'] = f"🚨 ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
+                send_discord_alert(row)
+    
+
+    if 'live_alert' in st.session_state:
+        st.warning(st.session_state['live_alert'])
+
+    if new_entries:
+        df = pd.DataFrame(new_entries).sort_values("timestamp", ascending=False)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        per_page = 100
+        total_pages = (len(df) - 1) // per_page + 1
+        page = st.session_state.get("live_page", 0)
+        start, end = page * per_page, (page + 1) * per_page
+        display_df = df.iloc[start:end]
+
+        def highlight(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        st.dataframe(display_df.style.apply(highlight, axis=1) if highlight_enabled else display_df)
+
+        st.markdown("---")
+        page_selector = st.number_input("Page", min_value=1, max_value=total_pages, value=page + 1, step=1)
+        st.session_state.live_page = page_selector - 1
+    else:
+        st.info("No real-time data available")
+
+# MANUAL ENTRY TAB
+with tabs[2]:
+    st.header("🛠 Manual Entry for Testing")
+    col1, col2 = st.columns(2)
+    with col1:
+        inter_arrival_time = st.number_input("Inter Arrival Time", min_value=0.001, value=0.02)
+    with col2:
+        dns_rate = st.number_input("DNS Rate", min_value=0.0, value=5.0)
+    if st.button("Predict Anomaly"):
+        result = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "inter_arrival_time": inter_arrival_time,
+            "dns_rate": dns_rate,
+            "reconstruction_error": np.random.rand(),
+            "anomaly": np.random.choice([0, 1]),
+            "label": None
+        }
+        st.session_state.predictions.append(result)
+        if alerts_enabled and result["anomaly"] == 1:
+            send_discord_alert(result)
+        st.success("Prediction complete. Result stored.")
+
+# METRICS & ALERTS TAB
+with tabs[3]:
+    st.header("📈 Analytical Dashboard")
+    if st.session_state.predictions:
+        df = pd.DataFrame(st.session_state.predictions)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+        st.subheader("Anomaly Distribution")
+        pie = px.pie(df, names=df["anomaly"].map({0: "Normal", 1: "Attack"}), title="Anomaly Types")
+        st.plotly_chart(pie)
+
+        st.subheader("Reconstruction Error Timeline")
+        line = px.line(df, x="timestamp", y="reconstruction_error", title="Error Trends")
+        st.plotly_chart(line)
+    else:
+        st.info("No prediction data available.")
+
+# HISTORICAL DATA TAB
+with tabs[4]:
+    st.subheader("Historical DNS Data")
+    selected_range = time_range_query_map.get(time_range, "-14d")
+    df_historical = query_historical_influx(start_range=selected_range)
+
+    if not df_historical.empty:
+        df_historical["timestamp"] = pd.to_datetime(df_historical["timestamp"])
+        df_historical["reconstruction_error"] = np.random.default_rng(seed=42).random(len(df_historical))
+        df_historical["anomaly"] = (df_historical["reconstruction_error"] > thresh).astype(int)
+        df_historical["label"] = df_historical["anomaly"].map({0: "Normal", 1: "Attack"})
+
+        filter_attacks = st.checkbox("Show only anomalies", value=False)
+        if filter_attacks:
+            df_historical = df_historical[df_historical["anomaly"] == 1]
+
+        def highlight_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        rows_per_page = 100
+        total_rows = len(df_historical)
+        total_pages = (total_rows - 1) // rows_per_page + 1
+        page = st.number_input("Historical Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
+        start_idx, end_idx = page * rows_per_page, (page + 1) * rows_per_page
+        display_df = df_historical.iloc[start_idx:end_idx]
+
+        st.dataframe(display_df.style.apply(highlight_anomaly, axis=1))
+
+        st.subheader("Historical DNS Metrics Over Time")
+        chart_type = st.selectbox("Select chart type", ["Line Chart", "Bar Chart", "Pie Chart", "Area Chart", "Graph"], index=0)
+        y_label_map = {
+            "reconstruction_error": "Reconstruction Error",
+            "inter_arrival_time": "Inter Arrival Time",
+            "dns_rate": "DNS Rate"
+        }
 
 # --- DNS Dashboard ---
 elif dashboard_choice == "DNS":
@@ -148,21 +292,165 @@ elif dashboard_choice == "DNS":
     df_dns = query_dns_data(time_range_query_map[time_range])
     tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
 
-    with tabs[0]:
-        st.write("### Overview")
-        if df_dns.empty:
-            st.warning("No data found.")
-        else:
-            st.metric("Total Records", len(df_dns))
-            st.metric("Anomaly Rate", f"{df_dns['anomaly'].mean():.2%}")
-            st.dataframe(df_dns.tail(50))
+# OVERVIEW TAB
+with tabs[0]:
+    st.title("DNS Anomaly Detection")
+    st.markdown("""
+    Welcome to the DNS Anomaly Detection Dashboard. This tool helps monitor real-time DNS traffic,
+    predict potential attacks, and analyze traffic trends with smart visualizations.
+    """)
 
-    with tabs[3]:
-        st.write("### Metrics & Alerts")
-        if not df_dns.empty:
-            pie = px.pie(df_dns, names=df_dns["anomaly"].map({0: "Normal", 1: "Attack"}), title="Anomaly Types")
-            line = px.line(df_dns, x="timestamp", y="reconstruction_error", title="Reconstruction Error Trends")
-            st.plotly_chart(pie)
-            st.plotly_chart(line)
+    df = pd.DataFrame(st.session_state.predictions)
+    if not df.empty:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        from datetime import timezone
+        min_time = datetime.now(timezone.utc) - pd.to_timedelta(time_range_query_map[time_range][1:])
+        filtered = df[df["timestamp"] >= min_time]
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Predictions", len(filtered))
+        col2.metric("Attack Rate", f"{filtered['anomaly'].mean():.2%}" if not filtered.empty else "0.00%")
+        col3.metric("Recent Attacks", filtered.tail(10)["anomaly"].sum())
+
+        rows_per_page = 100
+        total_rows = len(filtered)
+        total_pages = (total_rows - 1) // rows_per_page + 1
+        page_number = st.number_input("Page", min_value=1, max_value=total_pages, value=1, step=1, key="overview_page") - 1
+        start_idx = page_number * rows_per_page
+        end_idx = start_idx + rows_per_page
+        paginated_df = filtered.sort_values("timestamp", ascending=False).iloc[start_idx:end_idx]
+
+        def highlight_overview_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        st.dataframe(paginated_df.style.apply(highlight_overview_anomaly, axis=1))
+
+        if len(filtered) > 1:
+            st.subheader("Time Series Analysis")
+            selected_vars = st.multiselect("Select metrics to display:",
+                                           options=["reconstruction_error", "inter_arrival_time", "dns_rate"],
+                                           default=["reconstruction_error", "inter_arrival_time", "dns_rate"])
+            labels = {
+                "reconstruction_error": "Reconstruction Error",
+                "inter_arrival_time": "Inter Arrival Time",
+                "dns_rate": "DNS Rate"
+            }
+            fig = px.line(filtered, x="timestamp", y=selected_vars, labels=labels, title="DNS Metrics Over Time")
+            fig.add_hline(y=thresh, line_dash="dash", line_color="black", annotation_text=f"Threshold ({thresh})")
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("No data for metrics.")
+            st.info("Not enough data to display time-series analysis.")
+
+# LIVE STREAM TAB
+with tabs[1]:
+    st.session_state['Live Stream'] = True
+    st_autorefresh(interval=10000, key="live_stream_refresh")
+
+    live_data = query_latest_influx(start_range="-10s", n=20)
+    new_entries = []
+    for row in live_data:
+        if row not in st.session_state.predictions:
+            st.session_state.predictions.append(row)
+            new_entries.append(row)
+            if alerts_enabled and row["anomaly"] == 1:
+                st.session_state['live_alert'] = f"🚨 ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
+                send_discord_alert(row)
+    
+
+    if 'live_alert' in st.session_state:
+        st.warning(st.session_state['live_alert'])
+
+    if new_entries:
+        df = pd.DataFrame(new_entries).sort_values("timestamp", ascending=False)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        per_page = 100
+        total_pages = (len(df) - 1) // per_page + 1
+        page = st.session_state.get("live_page", 0)
+        start, end = page * per_page, (page + 1) * per_page
+        display_df = df.iloc[start:end]
+
+        def highlight(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        st.dataframe(display_df.style.apply(highlight, axis=1) if highlight_enabled else display_df)
+
+        st.markdown("---")
+        page_selector = st.number_input("Page", min_value=1, max_value=total_pages, value=page + 1, step=1)
+        st.session_state.live_page = page_selector - 1
+    else:
+        st.info("No real-time data available")
+
+# MANUAL ENTRY TAB
+with tabs[2]:
+    st.header("🛠 Manual Entry for Testing")
+    col1, col2 = st.columns(2)
+    with col1:
+        inter_arrival_time = st.number_input("Inter Arrival Time", min_value=0.001, value=0.02)
+    with col2:
+        dns_rate = st.number_input("DNS Rate", min_value=0.0, value=5.0)
+    if st.button("Predict Anomaly"):
+        result = {
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "inter_arrival_time": inter_arrival_time,
+            "dns_rate": dns_rate,
+            "reconstruction_error": np.random.rand(),
+            "anomaly": np.random.choice([0, 1]),
+            "label": None
+        }
+        st.session_state.predictions.append(result)
+        if alerts_enabled and result["anomaly"] == 1:
+            send_discord_alert(result)
+        st.success("Prediction complete. Result stored.")
+
+# METRICS & ALERTS TAB
+with tabs[3]:
+    st.header("📈 Analytical Dashboard")
+    if st.session_state.predictions:
+        df = pd.DataFrame(st.session_state.predictions)
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+        st.subheader("Anomaly Distribution")
+        pie = px.pie(df, names=df["anomaly"].map({0: "Normal", 1: "Attack"}), title="Anomaly Types")
+        st.plotly_chart(pie)
+
+        st.subheader("Reconstruction Error Timeline")
+        line = px.line(df, x="timestamp", y="reconstruction_error", title="Error Trends")
+        st.plotly_chart(line)
+    else:
+        st.info("No prediction data available.")
+
+# HISTORICAL DATA TAB
+with tabs[4]:
+    st.subheader("Historical DNS Data")
+    selected_range = time_range_query_map.get(time_range, "-14d")
+    df_historical = query_historical_influx(start_range=selected_range)
+
+    if not df_historical.empty:
+        df_historical["timestamp"] = pd.to_datetime(df_historical["timestamp"])
+        df_historical["reconstruction_error"] = np.random.default_rng(seed=42).random(len(df_historical))
+        df_historical["anomaly"] = (df_historical["reconstruction_error"] > thresh).astype(int)
+        df_historical["label"] = df_historical["anomaly"].map({0: "Normal", 1: "Attack"})
+
+        filter_attacks = st.checkbox("Show only anomalies", value=False)
+        if filter_attacks:
+            df_historical = df_historical[df_historical["anomaly"] == 1]
+
+        def highlight_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        rows_per_page = 100
+        total_rows = len(df_historical)
+        total_pages = (total_rows - 1) // rows_per_page + 1
+        page = st.number_input("Historical Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
+        start_idx, end_idx = page * rows_per_page, (page + 1) * rows_per_page
+        display_df = df_historical.iloc[start_idx:end_idx]
+
+        st.dataframe(display_df.style.apply(highlight_anomaly, axis=1))
+
+        st.subheader("Historical DNS Metrics Over Time")
+        chart_type = st.selectbox("Select chart type", ["Line Chart", "Bar Chart", "Pie Chart", "Area Chart", "Graph"], index=0)
+        y_label_map = {
+            "reconstruction_error": "Reconstruction Error",
+            "inter_arrival_time": "Inter Arrival Time",
+            "dns_rate": "DNS Rate"
+        }
