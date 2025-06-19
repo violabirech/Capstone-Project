@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -63,7 +62,7 @@ if dashboard_choice == "DoS":
     def detect_dos_anomalies(df):
         if df.empty:
             return df
-        api_url = "https://violabirech-final.hf.space/predict/dos"
+        api_url = "https://huggingface.co/spaces/violabirech/dos-anomalies-detection"
         results = []
         for _, row in df.iterrows():
             try:
@@ -130,7 +129,7 @@ elif dashboard_choice == "DNS":
                         row = record.values.copy()
                         row["timestamp"] = record.get_time()
                         try:
-                            response = requests.post("https://violabirech-final.hf.space/predict/dns", json={
+                            response = requests.post("https://huggingface.co/spaces/violabirech/dos-anomalies-detection", json={
                                 "dns_rate": row.get("dns_rate", 0),
                                 "inter_arrival_time": row.get("inter_arrival_time", 1)
                             })
