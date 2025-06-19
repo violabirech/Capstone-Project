@@ -89,7 +89,7 @@ tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "
 # --- Overview Tab ---
 @st.cache_data(ttl=600)
 def cached_data(time_range):
-   if dashboard_choice == "DoS":
+    if dashboard_choice == "DoS":
     return query_dos_data(time_range_query_map[time_range], limit=3000)
 elif dashboard_choice == "DNS":
     return query_dns_data(time_range_query_map[time_range], limit=3000)
