@@ -275,7 +275,7 @@ with tabs[4]:
 
             
 # --- DNS Dashboard ---
-elif dashboard_choice == "DNS":
+if dashboard_choice == "DNS":
     st.subheader("DNS Anomaly Detection Dashboard")
 
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
