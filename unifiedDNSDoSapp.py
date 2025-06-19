@@ -62,7 +62,7 @@ if dashboard_choice == "DoS":
     def detect_dos_anomalies(df):
         if df.empty:
             return df
-        api_url = "https://huggingface.co/spaces/violabirech/dos-anomalies-detection"
+        api_url = "https://violabirech-dos-anomalies-detection.hf.space/predict/dos"
         results = []
         for _, row in df.iterrows():
             try:
@@ -129,7 +129,7 @@ elif dashboard_choice == "DNS":
                         row = record.values.copy()
                         row["timestamp"] = record.get_time()
                         try:
-                            response = requests.post("https://huggingface.co/spaces/violabirech/dos-anomalies-detection", json={
+                            response = requests.post("https://violabirech-dos-anomalies-detection.hf.space/predict/dns", json={
                                 "dns_rate": row.get("dns_rate", 0),
                                 "inter_arrival_time": row.get("inter_arrival_time", 1)
                             })
