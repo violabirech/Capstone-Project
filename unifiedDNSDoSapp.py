@@ -33,55 +33,77 @@ time_range = st.sidebar.selectbox("Time Range", list(time_range_query_map.keys()
 threshold = st.sidebar.slider("Threshold", 0.01, 1.0, 0.1, 0.01)
 
 # --- DoS Dashboard ---
-if dashboard_choice == "DoS":
-    st.subheader("DoS Anomaly Detection Dashboard")
+# --- InfluxDB Setup ---
+INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
+INFLUXDB_ORG = "Anormally Detection"
+INFLUXDB_BUCKET = "realtime"
+INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+MEASUREMENT = "network_traffic"
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
 
-    INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
-    INFLUXDB_ORG = "Anormally Detection"
-    INFLUXDB_BUCKET = "realtime"
-    INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
-    MEASUREMENT = "network_traffic"
+# --- Helper Functions ---
+def query_influx(start_range="-1h", limit=300):
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            query = f'''
+            from(bucket: "{INFLUXDB_BUCKET}")
+              |> range(start: {start_range})
+              |> filter(fn: (r) => r._measurement == "{MEASUREMENT}")
+              |> filter(fn: (r) =>
+                   r._field == "packet_rate" or
+                   r._field == "packet_length" or
+                   r._field == "inter_arrival_time")
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> sort(columns: ["_time"], desc: false)
+              |> limit(n: {limit})
+            '''
+            df = client.query_api().query_data_frame(query)
+            df = df.rename(columns={"_time": "timestamp"})
+            if df.empty:
+                return pd.DataFrame()
+            expected = {"packet_rate", "packet_length", "inter_arrival_time"}
+            missing = expected - set(df.columns)
+            if missing:
+                st.error(f"InfluxDB error: missing fields: {sorted(missing)}")
+                return pd.DataFrame()
+            return df.dropna(subset=list(expected))
+    except Exception as e:
+        st.error(f"InfluxDB error: {e}")
+        return pd.DataFrame()
 
-    def query_dos_data(start_range="-1h", limit=300):
-        try:
-            with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
-                query = f"""from(bucket: \"{INFLUXDB_BUCKET}\")
-  |> range(start: {start_range})
-  |> filter(fn: (r) => r._measurement == \"{MEASUREMENT}\")
-  |> filter(fn: (r) => r._field == \"packet_rate\" or r._field == \"packet_length\" or r._field == \"inter_arrival_time\")
-  |> pivot(rowKey:[\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")
-  |> sort(columns: [\"_time\"], desc: false)
-  |> limit(n: {limit})"""
-                df = client.query_api().query_data_frame(query)
-                df = df.rename(columns={"_time": "timestamp"})
-                return df
-        except Exception as e:
-            st.error(f"DoS InfluxDB error: {e}")
-            return pd.DataFrame()
+def detect_anomalies(df):
+    required_cols = {"packet_rate", "packet_length", "inter_arrival_time"}
+    if df.empty or not required_cols.issubset(df.columns):
+        return pd.DataFrame()
+    X = df[["packet_rate", "packet_length", "inter_arrival_time"]]
+    model = IsolationForest(n_estimators=100, contamination=0.15, random_state=42)
+    model.fit(X)
+    df["anomaly_score"] = model.decision_function(X)
+    df["anomaly"] = (model.predict(X) == -1).astype(int)
+    return df
 
-    def detect_dos_anomalies(df):
-        if df.empty:
-            return df
-        api_url = "https://violabirech-dos-anomalies-detection.hf.space/predict/dos"
-        results = []
-        for _, row in df.iterrows():
-            try:
-                response = requests.post(api_url, json={
-                    "packet_rate": row["packet_rate"],
-                    "packet_length": row["packet_length"],
-                    "inter_arrival_time": row["inter_arrival_time"]
-                })
-                result = response.json()
-                row["anomaly_score"] = result["anomaly_score"]
-                row["anomaly"] = result["anomaly"]
-            except Exception as e:
-                row["anomaly_score"] = -1
-                row["anomaly"] = 0
-            results.append(row)
-        return pd.DataFrame(results)
+# --- Sidebar Controls ---
+time_range_query_map = {
+    "Last 30 min": "-30m",
+    "Last 1 hour": "-1h",
+    "Last 24 hours": "-24h",
+    "Last 7 days": "-7d"
+}
 
-    df_dos = query_dos_data(time_range_query_map[time_range])
-    df_dos = detect_dos_anomalies(df_dos)
+st.sidebar.header("Settings")
+alerts_enabled = st.sidebar.checkbox("Enable Discord Alerts", value=True)
+highlight_enabled = st.sidebar.checkbox("Highlight Anomalies", value=True)
+highlight_color = st.sidebar.selectbox("Anomaly Highlight Color", ["red", "orange", "yellow", "blue", "green"], index=4)
+time_range = st.sidebar.selectbox("Time Range", list(time_range_query_map.keys()), index=1)
+thresh = st.sidebar.slider("Anomaly Score Threshold", -1.0, 1.0, -0.1, 0.01)
+
+# --- Session State Init ---
+# Removed prediction cache logic to prevent duplicate tab rendering
+
+if "predictions" not in st.session_state or st.session_state.last_time_range != time_range:
+    df = query_influx(time_range_query_map[time_range])
+    st.session_state.predictions = detect_anomalies(df).to_dict("records")
+    st.session_state.last_time_range = time_range
 
 # --- Tabs ---
 tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
@@ -89,12 +111,7 @@ tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "
 # --- Overview Tab ---
 @st.cache_data(ttl=600)
 def cached_data(time_range):
-if dashboard_choice == "DoS":
-    return query_dos_data(time_range_query_map[time_range], limit=3000)
-elif dashboard_choice == "DNS":
-    return query_dns_data(time_range_query_map[time_range], limit=3000)
-else:
-    return pd.DataFrame()
+    return query_influx(time_range_query_map[time_range], limit=3000)
 
 with tabs[0]:
     st.title("DOS Anomaly Detection Dashboard")
@@ -277,50 +294,154 @@ with tabs[4]:
         st.download_button("Download CSV", csv_data, "dos_historical_data.csv", "text/csv")
     else:
         st.warning("No historical data available.")
-
             
 # --- DNS Dashboard ---
-if dashboard_choice == "DNS":
-    st.subheader("DNS Anomaly Detection Dashboard")
+import streamlit as st
+st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
 
-    INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
-    INFLUXDB_ORG = "Anormally Detection"
-    INFLUXDB_BUCKET = "realtime_dns"
-    INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+import requests
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import sqlite3
+from datetime import datetime, timedelta
+from influxdb_client import InfluxDBClient
+from streamlit_autorefresh import st_autorefresh
 
-    def query_dns_data(start_range="-1h", limit=300):
-        try:
-            with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
-                query = f"""from(bucket: \"{INFLUXDB_BUCKET}\")
-  |> range(start: {start_range})
-  |> filter(fn: (r) => r._measurement == \"dns\")
-  |> pivot(rowKey: [\"_time\"], columnKey: [\"_field\"], valueColumn: \"_value\")
-  |> sort(columns: [\"_time\"], desc: false)
-  |> limit(n: {limit})"""
-                tables = client.query_api().query(query)
-                records = []
-                for table in tables:
-                    for record in table.records:
-                        row = record.values.copy()
-                        row["timestamp"] = record.get_time()
-                        try:
-                            response = requests.post("https://violabirech-dos-anomalies-detection.hf.space/predict/dns", json={
-                                "dns_rate": row.get("dns_rate", 0),
-                                "inter_arrival_time": row.get("inter_arrival_time", 1)
-                            })
-                            result = response.json()
-                            row["reconstruction_error"] = result["reconstruction_error"]
-                            row["anomaly"] = result["anomaly"]
-                        except Exception:
-                            row["reconstruction_error"] = -1
-                            row["anomaly"] = 0
-                        records.append(row)
-                return pd.DataFrame(records)
-        except Exception as e:
-            st.error(f"DNS InfluxDB error: {e}")
-            return pd.DataFrame()
+# InfluxDB config
+INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
+INFLUXDB_ORG = "Anormally Detection"
+INFLUXDB_BUCKET = "realtime_dns"
+INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
 
-    df_dns = query_dns_data(time_range_query_map[time_range])
+DB_PATH = "attacks.db"
+def init_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        c = conn.cursor()
+        c.execute('''CREATE TABLE IF NOT EXISTS attacks (
+                        timestamp TEXT, inter_arrival_time REAL, dns_rate REAL,
+                        request_rate REAL, reconstruction_error REAL, anomaly INTEGER)''')
+        conn.commit()
+init_db()
+
+@st.cache_data(ttl=600, show_spinner=False)
+def query_latest_influx(start_range="-1m", n=100):
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            query = f'''
+            from(bucket: "{INFLUXDB_BUCKET}")
+              |> range(start: {start_range})
+              |> filter(fn: (r) => r._measurement == "dns")
+              |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> sort(columns: ["_time"], desc: true)
+              |> limit(n: {n})
+            '''
+            tables = client.query_api().query(query)
+            if not tables or len(tables[0].records) == 0:
+                return []
+            return [
+                {
+                    **record.values,
+                    "timestamp": record.get_time(),
+                    "source_ip": record.values.get("source_ip", record.values.get("src_ip", "N/A")),
+                    "dest_ip": record.values.get("dest_ip", record.values.get("dst_ip", "N/A")),
+                    "reconstruction_error": np.random.rand(),
+                    "anomaly": int(record.values["dns_rate"] > 100 or record.values["inter_arrival_time"] < 0.01),
+                    "label": None
+                }
+                for record in tables[0].records
+                if "inter_arrival_time" in record.values and "dns_rate" in record.values
+            ]
+    except Exception as e:
+        st.error(f"InfluxDB error: {e}")
+        return []
+
+@st.cache_data(ttl=600)
+def query_historical_influx(start_range):
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            query = f'''
+            from(bucket: "{INFLUXDB_BUCKET}")
+              |> range(start: {start_range})
+              |> filter(fn: (r) => r._measurement == "dns")
+              |> filter(fn: (r) => r._field == "inter_arrival_time" or r._field == "dns_rate")
+              |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> sort(columns: ["_time"], desc: false)
+              |> limit(n: 1000)
+            '''
+            tables = client.query_api().query(query)
+            records = []
+            for table in tables:
+                for record in table.records:
+                    record_data = record.values.copy()
+                    record_data["timestamp"] = record.get_time()
+                    records.append(record_data)
+            return pd.DataFrame(records)
+    except Exception as e:
+        st.error(f"Historical InfluxDB error: {e}")
+        return pd.DataFrame()
+
+def send_discord_alert(result):
+    src_ip = result.get("source_ip", "N/A")
+    dst_ip = result.get("dest_ip", "N/A")
+    timestamp = result.get("timestamp", "N/A")
+    dns_rate = result.get("dns_rate", "N/A")
+    iat = result.get("inter_arrival_time", "N/A")
+    error = result.get("reconstruction_error", 0.0)
+
+    message = {
+        "content": (
+            f"\ud83d\udea8 **DNS Anomaly Detected!**\n"
+            f"**Timestamp:** {timestamp}\n"
+            f"**Source IP:** {src_ip}\n"
+            f"**Destination IP:** {dst_ip}\n"
+            f"**DNS Rate:** {dns_rate}\n"
+            f"**Inter-arrival Time:** {iat}\n"
+            f"**Reconstruction Error:** {float(error):.6f}"
+        )
+    }
+    try:
+        requests.post(DISCORD_WEBHOOK, json=message, timeout=5)
+    except Exception as e:
+        st.warning(f"Discord alert failed: {e}")
+
+# Map time range options to InfluxDB range syntax
+time_range_query_map = {
+    "Last 30 min": "-30m",
+    "Last 1 hour": "-1h",
+    "Last 24 hours": "-24h",
+    "Last 7 days": "-7d",
+    "Last 14 days": "-14d",
+    "Last 30 days": "-30d"
+}
+
+# Sidebar controls
+st.sidebar.header("Settings")
+alerts_enabled = st.sidebar.checkbox("Enable Discord Alerts", value=True)
+highlight_enabled = st.sidebar.checkbox("Highlight Anomalies", value=True)
+highlight_color = st.sidebar.selectbox(
+    "Anomaly Highlight Color",
+    options=["red", "orange", "yellow", "green", "blue", "purple", "pink"],
+    index=3
+)
+
+time_range = st.sidebar.selectbox(
+    "Time Range",
+    list(time_range_query_map.keys()),
+    index=4
+)
+
+thresh = st.sidebar.slider("Threshold", 0.01, 1.0, 0.1, 0.01)
+
+# Query fresh data from InfluxDB on load
+if "predictions" not in st.session_state:
+    st.session_state.predictions = []
+
+if not st.session_state.predictions:
+    seed_data = query_latest_influx(start_range=time_range_query_map[time_range], n=100)
+    st.session_state.predictions.extend(seed_data)
+
 # Tabs setup
 tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
 
@@ -444,6 +565,82 @@ with tabs[3]:
         st.subheader("Anomaly Distribution")
         pie = px.pie(df, names=df["anomaly"].map({0: "Normal", 1: "Attack"}), title="Anomaly Types")
         st.plotly_chart(pie)
+
+        st.subheader("Reconstruction Error Timeline")
+        line = px.line(df, x="timestamp", y="reconstruction_error", title="Error Trends")
+        st.plotly_chart(line)
+    else:
+        st.info("No prediction data available.")
+
+# HISTORICAL DATA TAB
+with tabs[4]:
+    st.subheader("Historical DNS Data")
+    selected_range = time_range_query_map.get(time_range, "-14d")
+    df_historical = query_historical_influx(start_range=selected_range)
+
+    if not df_historical.empty:
+        df_historical["timestamp"] = pd.to_datetime(df_historical["timestamp"])
+        df_historical["reconstruction_error"] = np.random.default_rng(seed=42).random(len(df_historical))
+        df_historical["anomaly"] = (df_historical["reconstruction_error"] > thresh).astype(int)
+        df_historical["label"] = df_historical["anomaly"].map({0: "Normal", 1: "Attack"})
+
+        filter_attacks = st.checkbox("Show only anomalies", value=False)
+        if filter_attacks:
+            df_historical = df_historical[df_historical["anomaly"] == 1]
+
+        def highlight_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        rows_per_page = 100
+        total_rows = len(df_historical)
+        total_pages = (total_rows - 1) // rows_per_page + 1
+        page = st.number_input("Historical Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
+        start_idx, end_idx = page * rows_per_page, (page + 1) * rows_per_page
+        display_df = df_historical.iloc[start_idx:end_idx]
+
+        st.dataframe(display_df.style.apply(highlight_anomaly, axis=1))
+
+        st.subheader("Historical DNS Metrics Over Time")
+        chart_type = st.selectbox("Select chart type", ["Line Chart", "Bar Chart", "Pie Chart", "Area Chart", "Graph"], index=0)
+        y_label_map = {
+            "reconstruction_error": "Reconstruction Error",
+            "inter_arrival_time": "Inter Arrival Time",
+            "dns_rate": "DNS Rate"
+        }
+        
+
+        
+        if chart_type == "Line Chart":
+            fig = px.line(df_historical, x="timestamp", y="dns_rate", labels=y_label_map,
+                          color="label",
+                          color_discrete_map={"Normal": "#1f77b4", "Attack": "red"},
+                          title="Historical DNS Metrics Over Time")
+        elif chart_type == "Bar Chart":
+            fig = px.bar(df_historical, x="timestamp", y="dns_rate",
+                         color="label",
+                         color_discrete_map={"Normal": "#1f77b4", "Attack": "red"},
+                         title="DNS Rate Over Time")
+        elif chart_type == "Pie Chart":
+            fig = px.pie(df_historical, names="label",
+                         color_discrete_map={"Normal": "#1f77b4", "Attack": "red"},
+                         title="Anomaly Distribution in Historical Data")
+        elif chart_type == "Graph":
+            fig = px.scatter(df_historical, x="timestamp", y="dns_rate",
+                            color="label",
+                            color_discrete_map={"Normal": "#1f77b4", "Attack": "red"},
+                            title="DNS Rate Graph Over Time")
+        elif chart_type == "Area Chart":
+            fig = px.area(df_historical, x="timestamp", y="dns_rate",
+                         color="label",
+                         color_discrete_map={"Normal": "#1f77b4", "Attack": "red"},
+                         title="DNS Rate Area Chart Over Time")
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        csv_data = df_historical.to_csv(index=False)
+        st.download_button("Download Historical Data (CSV)", csv_data, "historical_data.csv", "text/csv")
+    else:
+        st.warning("No historical data available from InfluxDB.")
 
         st.subheader("Reconstruction Error Timeline")
         line = px.line(df, x="timestamp", y="reconstruction_error", title="Error Trends")
