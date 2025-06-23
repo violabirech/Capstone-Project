@@ -11,7 +11,7 @@ def render(thresh, highlight_color):
 
     col1, col2 = st.columns(2)
     with col1:
-        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=7))
+        start_date = st.date_input("Start Date", datetime.now() - timedelta(days=14))
     with col2:
         end_date = st.date_input("End Date", datetime.now())
 
