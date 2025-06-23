@@ -206,7 +206,7 @@ with tabs[1]:
             st.session_state.predictions.append(row)
             new_entries.append(row)
             if alerts_enabled and row["anomaly"] == 1:
-                st.session_state['live_alert'] = f"🚨 ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
+                st.session_state['live_alert'] = f" ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
                 send_discord_alert(row)
     
 
