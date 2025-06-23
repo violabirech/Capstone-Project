@@ -360,7 +360,7 @@ with tabs[4]:
     # ... (Paste your full DNS logic here)
 
 elif dashboard_choice == "DoS":
-# --- InfluxDB Setup ---
+    # --- InfluxDB Setup ---
     INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
     INFLUXDB_ORG = "Anormally Detection"
     INFLUXDB_BUCKET = "realtime"
