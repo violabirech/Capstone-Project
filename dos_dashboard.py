@@ -1,5 +1,10 @@
+# dos_dashboard.py
 import streamlit as st
 import pandas as pd
+
+def show_dos_dashboard():
+    st.subheader("DoS Anomaly Detection")
+
 import numpy as np
 import uuid
 import requests
