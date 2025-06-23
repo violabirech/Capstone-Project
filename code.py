@@ -21,8 +21,7 @@ st.sidebar.header("Dashboard Selection")
 dashboard_choice = st.sidebar.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
 
 if dashboard_choice == "DNS":
-
-# InfluxDB config
+    # InfluxDB config
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
 INFLUXDB_ORG = "Anormally Detection"
 INFLUXDB_BUCKET = "realtime_dns"
