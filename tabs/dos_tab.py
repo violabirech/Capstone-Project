@@ -1,7 +1,8 @@
-def render():
-    st.header("DoS Dashboard")
 import streamlit as st
-import pandas as pd
+
+def render():
+    st.subheader("DoS Anomaly Detection")
+    st.info("import pandas as pd
 import numpy as np
 import uuid
 import requests
@@ -275,3 +276,4 @@ with tabs[4]:
         st.download_button("Download CSV", csv_data, "dos_historical_data.csv", "text/csv")
     else:
         st.warning("No historical data available.")
+")
