@@ -228,9 +228,11 @@ Inter-arrival Time: {result['inter_arrival_time']}"""
             rows_per_page = 100
             total_pages = (total_records - 1) // rows_per_page + 1
             page = st.number_input("Historical Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
-            start_idx, end_idx = page * rows_per_page
+
+            start_idx = page * rows_per_page
             end_idx = (page + 1) * rows_per_page
             display_df = df_hist.iloc[start_idx:end_idx]
+
 
             def highlight_anomaly(row):
                 return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
