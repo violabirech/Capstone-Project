@@ -8,7 +8,7 @@ st.title("Real-Time Network Anomaly Detection")
 dashboard_choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
 
 # --- Load and Execute Dashboard ---
-if dashboard_choice == "DNS":
-    exec(open("dns_dashboard.py").read())
-elif dashboard_choice == "DoS":
+if dashboard_choice == "DoS":
     exec(open("dos_dashboard.py").read())
+elif dashboard_choice == "DNS":
+    exec(open("dns_dashboard.py").read())
