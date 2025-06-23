@@ -1,11 +1,5 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import requests
-from datetime import datetime
-from sklearn.ensemble import IsolationForest
-from influxdb_client import InfluxDBClient
-from streamlit_autorefresh import st_autorefresh
 from tabs import (
     overview,
     live_stream,
@@ -13,6 +7,9 @@ from tabs import (
     metrics,
     historical
 )
+from influxdb_client import InfluxDBClient
+from datetime import datetime
+import requests
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
@@ -44,6 +41,73 @@ if "predictions" not in st.session_state:
 if "attacks" not in st.session_state:
     st.session_state.attacks = []
 
+# --- QUERY FUNCTIONS ---
+def query_influxdb(bucket, measurement, fields, start_range="-1h", limit=300):
+    INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
+    INFLUXDB_ORG = "Anormally Detection"
+    INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            field_filter = " or ".join([f'r._field == "{f}"' for f in fields])
+            query = f"""
+                from(bucket: "{bucket}")
+                |> range(start: {start_range})
+                |> filter(fn: (r) => r._measurement == "{measurement}")
+                |> filter(fn: (r) => {field_filter})
+                |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+                |> sort(columns: ["_time"], desc: false)
+                |> limit(n: {limit})
+            """
+            df = client.query_api().query_data_frame(query)
+            df = df.rename(columns={"_time": "timestamp"})
+            return df
+    except Exception as e:
+        st.error(f"InfluxDB Error: {e}")
+        return pd.DataFrame()
+
+def detect_anomalies(df, endpoint):
+    results = []
+    for _, row in df.iterrows():
+        try:
+            response = requests.post(endpoint, json=row.to_dict())
+            result = response.json()
+            row["anomaly"] = result.get("anomaly", 0)
+            row["anomaly_score"] = result.get("anomaly_score", result.get("reconstruction_error", -1))
+        except Exception as e:
+            row["anomaly"] = 0
+            row["anomaly_score"] = -1
+        results.append(row)
+    return pd.DataFrame(results)
+
+# --- DATA LOAD ---
+query_range = time_range_query_map[time_range]
+if dashboard_choice == "DoS":
+    df = query_influxdb("realtime", "network_traffic", ["packet_rate", "packet_length", "inter_arrival_time"], query_range)
+    if not df.empty:
+        df = detect_anomalies(df, "https://violabirech-dos-anomalies-detection.hf.space/predict/dos")
+else:
+    df = query_influxdb("realtime_dns", "dns", ["dns_rate", "inter_arrival_time"], query_range)
+    if not df.empty:
+        # Restructure row for DNS input before sending
+        def make_payload(row):
+            return {
+                "dns_rate": row.get("dns_rate", 0),
+                "inter_arrival_time": row.get("inter_arrival_time", 1)
+            }
+        results = []
+        for _, row in df.iterrows():
+            try:
+                response = requests.post("https://violabirech-dos-anomalies-detection.hf.space/predict/dns", json=make_payload(row))
+                result = response.json()
+                row["anomaly"] = result.get("anomaly", 0)
+                row["reconstruction_error"] = result.get("reconstruction_error", -1)
+            except:
+                row["anomaly"] = 0
+                row["reconstruction_error"] = -1
+            results.append(row)
+        df = pd.DataFrame(results)
+
 # --- TABS ---
 tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
 
@@ -57,7 +121,6 @@ with tabs[2]:
     manual_entry.render(dashboard_choice)
 
 with tabs[3]:
-    df = pd.DataFrame(st.session_state.predictions)
     metrics.render(df, dashboard_choice, threshold)
 
 with tabs[4]:
