@@ -360,13 +360,13 @@ with tabs[4]:
     # ... (Paste your full DNS logic here)
 
 elif dashboard_choice == "DoS":
-    # --- InfluxDB Setup ---
-    INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
-    INFLUXDB_ORG = "Anormally Detection"
-    INFLUXDB_BUCKET = "realtime"
-    INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
-    MEASUREMENT = "network_traffic"
-    DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
+# --- InfluxDB Setup ---
+INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
+INFLUXDB_ORG = "Anormally Detection"
+INFLUXDB_BUCKET = "realtime"
+INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+MEASUREMENT = "network_traffic"
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
 
 # --- Helper Functions ---
 def query_influx(start_range="-1h", limit=300):
