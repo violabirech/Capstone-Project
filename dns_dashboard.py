@@ -2,7 +2,7 @@
 import streamlit as st
 
 
-def show_dos_dashboard():
+def show_dns_dashboard():
     st.subheader("DoS Anomaly Detection")
 
 import requests
