@@ -1,7 +1,4 @@
 import streamlit as st
-from dos_dashboard import show_dos_dashboard
-from dns_dashboard import show_dns_dashboard
-
 st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
 st.title("Real-Time Network Anomaly Detection")
 
