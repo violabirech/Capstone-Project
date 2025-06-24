@@ -7,7 +7,7 @@ st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide"
 st.title("🌐 Real-Time Network Anomaly Detection")
 
 # Dashboard selector
-dashboard_choice = st.radio("Select a Dashboard:", ["🔴 DoS", "🟦 DNS"], horizontal=True)
+dashboard_choice = st.radio("Select a Dashboard:", ["🟦 DNS", "🔴 DoS"], horizontal=True)
 
 # Launch appropriate dashboard
 if dashboard_choice == "🔴 DoS":
