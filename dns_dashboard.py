@@ -7,7 +7,6 @@ from sklearn.ensemble import IsolationForest
 from influxdb_client import InfluxDBClient
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px   
-st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
 
 # InfluxDB config
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
@@ -342,3 +341,5 @@ with tabs[4]:
         st.download_button("Download Historical Data (CSV)", csv_data, "historical_data.csv", "text/csv")
     else:
         st.warning("No historical data available from InfluxDB.")
+
+st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
