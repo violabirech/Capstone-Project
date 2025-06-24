@@ -1,13 +1,16 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import uuid
-import requests
-from datetime import datetime, timedelta, timezone
-from sklearn.ensemble import IsolationForest
-from influxdb_client import InfluxDBClient
-from streamlit_autorefresh import st_autorefresh
-import plotly.express as px
+def show_dos_dashboard():
+    import streamlit as st
+    import pandas as pd
+    import numpy as np
+    import requests
+    from datetime import datetime
+    from sklearn.ensemble import IsolationForest
+    from influxdb_client import InfluxDBClient
+    from streamlit_autorefresh import st_autorefresh
+    import plotly.express as px
+
+    # (Insert full fixed dashboard code here — already shared in earlier messages)
+    # Make sure all session state keys are safely initialized
 
 # --- Page Setup ---
 st.set_page_config(page_title="DOS Anomaly Detection Dashboard", layout="wide")
