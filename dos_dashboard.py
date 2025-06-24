@@ -1,4 +1,5 @@
-import streamlit as st
+def show_dos_dashboard():
+    import streamlit as st
 import pandas as pd
 import numpy as np
 import requests    
