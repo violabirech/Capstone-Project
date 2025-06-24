@@ -1,14 +1,12 @@
-def show_dns_dashboard():
-    import streamlit as st
-    import pandas as pd
-    import numpy as np
-    import requests
-    from datetime import datetime
-    from sklearn.ensemble import IsolationForest
-    from influxdb_client import InfluxDBClient
-    from streamlit_autorefresh import st_autorefresh
-    import plotly.express as px
-    
+import streamlit as st
+import pandas as pd
+import numpy as np
+import requests
+from datetime import datetime
+from sklearn.ensemble import IsolationForest
+from influxdb_client import InfluxDBClient
+from streamlit_autorefresh import st_autorefresh
+import plotly.express as px   
 st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
 
 # InfluxDB config
