@@ -224,7 +224,6 @@ with tabs[4]:
                          color="anomaly",
                          color_discrete_map={0: "#1f77b4", 1: "red"},
                          title="Packet Rate Over Time")
-    st.subheader("Historical DoS Data")
     df_hist = query_influx("-7d", limit=3000)
     if df_hist.empty:
         st.warning("No historical data.")
