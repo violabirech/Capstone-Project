@@ -238,7 +238,7 @@ with tabs[1]:
 
 # MANUAL ENTRY TAB
 with tabs[2]:
-    st.header("🛠 Manual Entry for Testing")
+    st.header("Manual Entry for Testing")
     col1, col2 = st.columns(2)
     with col1:
         inter_arrival_time = st.number_input("Inter Arrival Time", min_value=0.001, value=0.02)
@@ -260,7 +260,7 @@ with tabs[2]:
 
 # METRICS & ALERTS TAB
 with tabs[3]:
-    st.header("📈 Analytical Dashboard")
+    st.header("Analytical Dashboard")
     if st.session_state.predictions:
         df = pd.DataFrame(st.session_state.predictions)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
