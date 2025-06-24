@@ -181,6 +181,49 @@ with tabs[3]:
 
 # --- Historical Data Tab ---
 with tabs[4]:
+    st.subheader("DOS Historical Data")
+    df_hist = cached_historical()
+    if not df_hist.empty:
+        df_hist = detect_anomalies(df_hist)
+        df_hist["timestamp"] = pd.to_datetime(df_hist["timestamp"])
+
+        total_records = len(df_hist)
+        anomaly_rate = df_hist["anomaly"].mean()
+        total_attacks = df_hist["anomaly"].sum()
+
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Total Records (All Time)", total_records)
+        col2.metric("Anomaly Rate (All Time)", f"{anomaly_rate:.2%}")
+        col3.metric("Total Attacks", total_attacks)
+
+        rows_per_page = 100
+        total_pages = (total_records - 1) // rows_per_page + 1
+        page = st.number_input("Historical Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
+        start_idx, end_idx = page * rows_per_page, (page + 1) * rows_per_page
+        display_df = df_hist.iloc[start_idx:end_idx]
+
+        def highlight_anomaly(row):
+            return [f"background-color: {highlight_color}" if row["anomaly"] == 1 else ""] * len(row)
+
+        st.dataframe(display_df.style.apply(highlight_anomaly, axis=1))
+
+        chart_type = st.selectbox("Select chart type", ["Line Chart", "Bar Chart", "Pie Chart", "Area Chart", "Graph"], index=0)
+        y_label_map = {
+            "packet_rate": "Packet Rate",
+            "packet_length": "Packet Length",
+            "inter_arrival_time": "Inter-Arrival Time"
+        }
+
+        if chart_type == "Line Chart":
+            fig = px.line(df_hist, x="timestamp", y="packet_rate", labels=y_label_map,
+                          color="anomaly",
+                          color_discrete_map={0: "#1f77b4", 1: "red"},
+                          title="Historical DoS Metrics Over Time")
+        elif chart_type == "Bar Chart":
+            fig = px.bar(df_hist, x="timestamp", y="packet_rate",
+                         color="anomaly",
+                         color_discrete_map={0: "#1f77b4", 1: "red"},
+                         title="Packet Rate Over Time")
     st.subheader("Historical DoS Data")
     df_hist = query_influx("-7d", limit=3000)
     if df_hist.empty:
