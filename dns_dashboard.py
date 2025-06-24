@@ -1,3 +1,5 @@
+def show_dns_dashboard():
+    st.subheader("DNS Anomaly Detection Dashboard")
 import streamlit as st
 import pandas as pd
 import numpy as np
