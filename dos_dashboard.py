@@ -9,6 +9,23 @@ from influxdb_client import InfluxDBClient
 from streamlit_autorefresh import st_autorefresh
 import plotly.express as px
 
+# Call Hugging Face API only when local anomaly is detected
+def call_dos_api(packet_rate, packet_length, inter_arrival_time):
+    url = "https://violabirech-dos-anomalies-detection.hf.space/run/predict_dos"
+    payload = {
+        "data": [[packet_rate, packet_length, inter_arrival_time]]
+    }
+    try:
+        response = requests.post(url, json=payload, timeout=10)
+        if response.status_code == 200:
+            result = response.json()
+            return result['data'][0]['anomaly']
+        else:
+            st.warning(f"API error: {response.status_code}")
+            return 0
+    except Exception as e:
+        st.warning(f"API call failed: {e}")
+        return 0 
 def show_dos_dashboard():
     # --- Page Setup ---
     st.set_page_config(page_title="DOS Anomaly Detection Dashboard", layout="wide")
