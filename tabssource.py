@@ -1,5 +1,3 @@
-import streamlit as st
-
 st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
 st.title("Real-Time Network Anomaly Detection")
 
