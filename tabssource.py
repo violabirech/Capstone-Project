@@ -8,4 +8,4 @@ dashboard_choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=Tr
 if dashboard_choice == "DNS":
     exec(open("dns_dashboard.py").read())
 else:
-    exec(open("dos_dashboard.py").read())  # ✅ Safe now if top of file has proper session_state init
+    exec(open("dos_dashboard.py").read())  
