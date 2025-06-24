@@ -19,5 +19,5 @@ dashboard_choice = st.radio(
 # Load respective dashboard
 if dashboard_choice == "DNS":
     exec(open("dns_dashboard.py").read())
-else:
+elif dashboard_choice == "DoS":
     exec(open("dos_dashboard.py").read())
