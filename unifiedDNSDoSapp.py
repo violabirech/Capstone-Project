@@ -474,7 +474,37 @@ with tabs[4]:
     st.subheader("Historical DNS Data")
     selected_range = time_range_query_map.get(time_range, "-14d")
     df_historical = query_historical_influx(start_range=selected_range)
-
+def query_historical_influx(start_range="-14d", limit=3000):
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            query = f"""from(bucket: "{INFLUXDB_BUCKET}")
+  |> range(start: {start_range})
+  |> filter(fn: (r) => r._measurement == "dns")
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: false)
+  |> limit(n: {limit})"""
+            tables = client.query_api().query(query)
+            records = []
+            for table in tables:
+                for record in table.records:
+                    row = record.values.copy()
+                    row["timestamp"] = record.get_time()
+                    try:
+                        response = requests.post("https://violabirech-dos-anomalies-detection.hf.space/predict/dns", json={
+                            "dns_rate": row.get("dns_rate", 0),
+                            "inter_arrival_time": row.get("inter_arrival_time", 1)
+                        })
+                        result = response.json()
+                        row["reconstruction_error"] = result["reconstruction_error"]
+                        row["anomaly"] = result["anomaly"]
+                    except Exception:
+                        row["reconstruction_error"] = -1
+                        row["anomaly"] = 0
+                    records.append(row)
+            return pd.DataFrame(records)
+    except Exception as e:
+        st.error(f"Error fetching historical DNS data: {e}")
+        return pd.DataFrame()
     if not df_historical.empty:
         df_historical["timestamp"] = pd.to_datetime(df_historical["timestamp"])
         df_historical["reconstruction_error"] = np.random.default_rng(seed=42).random(len(df_historical))
