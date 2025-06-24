@@ -24,8 +24,26 @@ def init_db():
         c.execute('''CREATE TABLE IF NOT EXISTS attacks (
                         timestamp TEXT, inter_arrival_time REAL, dns_rate REAL,
                         request_rate REAL, reconstruction_error REAL, anomaly INTEGER)''')
+def init_db():
+    if "db_initialized" not in st.session_state:
+        conn = sqlite3.connect("dns_anomalies.db", check_same_thread=False)
+        cursor = conn.cursor()
+        cursor.execute("""CREATE TABLE IF NOT EXISTS logs (
+            timestamp TEXT,
+            dns_rate REAL,
+            inter_arrival_time REAL,
+            anomaly INTEGER,
+            score REAL
+        )""")
         conn.commit()
-init_db()
+        st.session_state["db_initialized"] = True
+    return sqlite3.connect("dns_anomalies.db", check_same_thread=False)
+
+conn = init_db()
+
+st.sidebar.title("DNS Settings")
+...
+
 
 @st.cache_data(ttl=600, show_spinner=False)
 def query_latest_influx(start_range="-1m", n=100):
