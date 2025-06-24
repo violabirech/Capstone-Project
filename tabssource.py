@@ -1,14 +1,16 @@
 import streamlit as st
 
-# Set page config
+# Set page configuration
 st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
 st.title("Real-Time Network Anomaly Detection")
 
-# Toggle between dashboards
+# Dashboard selector
 dashboard_choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
 
-# Load respective dashboard
+# Run the appropriate dashboard script
 if dashboard_choice == "DNS":
-    exec(open("dns_dashboard.py").read())
-else:
-    exec(open("dos_dashboard.py").read())
+    with open("dns_dashboard.py", "r") as file:
+        exec(file.read())
+elif dashboard_choice == "DoS":
+    with open("dos_dashboard.py", "r") as file:
+        exec(file.read())
