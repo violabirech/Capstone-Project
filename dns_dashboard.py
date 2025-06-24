@@ -1,14 +1,15 @@
-import streamlit as st
+def show_dos_dashboard():
+    import streamlit as st
+    import pandas as pd
+    import numpy as np
+    import requests
+    from datetime import datetime
+    from sklearn.ensemble import IsolationForest
+    from influxdb_client import InfluxDBClient
+    from streamlit_autorefresh import st_autorefresh
+    import plotly.express as px
+    
 st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
-
-import requests
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import sqlite3
-from datetime import datetime, timedelta
-from influxdb_client import InfluxDBClient
-from streamlit_autorefresh import st_autorefresh
 
 # InfluxDB config
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
