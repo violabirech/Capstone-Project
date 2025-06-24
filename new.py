@@ -1,9 +1,12 @@
+from dns_dashboard import show_dns_dashboard
+from dos_dashboard import show_dos_dashboard
 
-st.set_page_config(page_title="Unified Network Anomaly Dashboard", layout="wide")
+st.set_page_config(page_title="Unified Network Anomaly Detection", layout="wide")
 st.title("Real-Time Network Anomaly Detection")
 
-dashboard = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
-if dashboard_choice == "DNS":
-    load_dashboard("dns_dashboard")
+choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=True)
+
+if choice == "DNS":
+    show_dns_dashboard()
 else:
-    load_dashboard("dos_dashboard")
+    show_dos_dashboard()
