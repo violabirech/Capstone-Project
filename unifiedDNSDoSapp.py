@@ -86,7 +86,7 @@ if dashboard_choice == "DoS":
     tabs = st.tabs(["Overview", "Live Stream", "Manual Entry", "Metrics & Alerts", "Historical Data"])
     with tabs[0]:
         st.title("DOS Anomaly Detection Dashboard")
-        df = cached_data(time_range)
+        df = detect_dos_anomalies(query_dos_data(time_range_query_map[time_range]))
         df = detect_anomalies(df)
         if df.empty:
             st.warning("No data found for the selected time range. Please adjust the time range in the sidebar.")
