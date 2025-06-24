@@ -11,5 +11,4 @@ dashboard_choice = st.radio("Select a Dashboard:", ["DNS", "DoS"], horizontal=Tr
 
 if dashboard_choice == "DNS":
     show_dns_dashboard()
-else:
-    show_dos_dashboard()
+
