@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
+
 import requests
 import pandas as pd
 import numpy as np
@@ -8,14 +10,11 @@ from datetime import datetime, timedelta
 from influxdb_client import InfluxDBClient
 from streamlit_autorefresh import st_autorefresh
 
-# --- Page Setup ---
-st.set_page_config(page_title="DNS Anomaly Detection Dashboard", layout="wide")
-
 # InfluxDB config
 INFLUXDB_URL = "https://us-east-1-1.aws.cloud2.influxdata.com"
 INFLUXDB_ORG = "Anormally Detection"
 INFLUXDB_BUCKET = "realtime_dns"
-INFLUXDB_TOKEN = "DfmvA8hl5EeOcpR-d6c_ep6dRtSRbEcEM_Zqp8-1746dURtVqMDGni4rRNQbHouhqmdC7t9Kj6Y-AyOjbBg-zg=="
+INFLUXDB_TOKEN = "6gjE97dCC24hgOgWNmRXPqOS0pfc0pMSYeh5psL8e5u2T8jGeV1F17CU-U1z05if0jfTEmPRW9twNPSXN09SRQ=="
 DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1383262825534984243/mMaPgCDV7tgEMsT_-5ABWpnxMJB746kM_hQqFa2F87lRKeBqCx9vyGY6sEyoY4NnZ7d7"
 
 DB_PATH = "attacks.db"
@@ -209,7 +208,7 @@ with tabs[1]:
             st.session_state.predictions.append(row)
             new_entries.append(row)
             if alerts_enabled and row["anomaly"] == 1:
-                st.session_state['live_alert'] = f" ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
+                st.session_state['live_alert'] = f"🚨 ALERT: Attack detected from {row['source_ip']} to {row['dest_ip']} at {row['timestamp']}"
                 send_discord_alert(row)
     
 
@@ -238,7 +237,7 @@ with tabs[1]:
 
 # MANUAL ENTRY TAB
 with tabs[2]:
-    st.header("Manual Entry for Testing")
+    st.header("🛠 Manual Entry for Testing")
     col1, col2 = st.columns(2)
     with col1:
         inter_arrival_time = st.number_input("Inter Arrival Time", min_value=0.001, value=0.02)
@@ -260,7 +259,7 @@ with tabs[2]:
 
 # METRICS & ALERTS TAB
 with tabs[3]:
-    st.header("Analytical Dashboard")
+    st.header("📈 Analytical Dashboard")
     if st.session_state.predictions:
         df = pd.DataFrame(st.session_state.predictions)
         df["timestamp"] = pd.to_datetime(df["timestamp"])
