@@ -89,7 +89,7 @@ if dashboard_choice == "DoS":
     with tabs[0]:
         st.title("DOS Anomaly Detection Dashboard")
         df = detect_dos_anomalies(query_dos_data(time_range_query_map[time_range]))
-        df = detect_anomalies(df)
+        df = detect_dos_anomalies(df)
         if df.empty:
             st.warning("No data found for the selected time range. Please adjust the time range in the sidebar.")
         else:
@@ -473,7 +473,7 @@ with tabs[3]:
 with tabs[4]:
     st.subheader("Historical DNS Data")
     selected_range = time_range_query_map.get(time_range, "-14d")
-    df_historical = query_historical_influx(start_range=selected_range)
+    df_historical = query_dns_data(start_range=selected_range, limit=3000)
 def query_historical_influx(start_range="-14d", limit=3000):
     try:
         with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
