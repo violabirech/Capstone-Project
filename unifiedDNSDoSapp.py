@@ -365,7 +365,37 @@ with tabs[0]:
 with tabs[1]:
     st.session_state['Live Stream'] = True
     st_autorefresh(interval=10000, key="live_stream_refresh")
-
+def query_latest_influx(start_range="-10s", n=20):
+    try:
+        with InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG) as client:
+            query = f"""from(bucket: "{INFLUXDB_BUCKET}")
+  |> range(start: {start_range})
+  |> filter(fn: (r) => r._measurement == "dns")
+  |> pivot(rowKey: ["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: false)
+  |> limit(n: {n})"""
+            tables = client.query_api().query(query)
+            records = []
+            for table in tables:
+                for record in table.records:
+                    row = record.values.copy()
+                    row["timestamp"] = record.get_time()
+                    try:
+                        response = requests.post("https://violabirech-dos-anomalies-detection.hf.space/predict/dns", json={
+                            "dns_rate": row.get("dns_rate", 0),
+                            "inter_arrival_time": row.get("inter_arrival_time", 1)
+                        })
+                        result = response.json()
+                        row["reconstruction_error"] = result["reconstruction_error"]
+                        row["anomaly"] = result["anomaly"]
+                    except Exception:
+                        row["reconstruction_error"] = -1
+                        row["anomaly"] = 0
+                    records.append(row)
+            return records
+    except Exception as e:
+        st.error(f"Error querying InfluxDB: {e}")
+        return []
     live_data = query_latest_influx(start_range="-10s", n=20)
     new_entries = []
     for row in live_data:
